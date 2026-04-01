@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Psychrometric Heat Imbalance Chart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #f5f4f0;
+  --surface: #ffffff;
+  --surf2:   #eeede9;
+  --border:  rgba(0,0,0,0.09);
+  --border2: rgba(0,0,0,0.16);
+  --text:    #1a1917;
+  --text2:   #6a6760;
+  --text3:   #9c9990;
+  --radius:  10px;
+  --font:    'DM Sans', system-ui, sans-serif;
+  --mono:    'DM Mono', 'Fira Mono', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:      #111110;
+    --surface: #1c1b19;
+    --surf2:   #242320;
+    --border:  rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.14);
+    --text:    #e5e3dc;
+    --text2:   #9c9990;
+    --text3:   #6a6760;
+  }
+}
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+header {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 0.5px solid var(--border2);
+}
+.header-top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+header h1 {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.tag {
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  background: var(--surf2);
+  border: 0.5px solid var(--border2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--text2);
+}
+header p {
+  font-size: 13px;
+  color: var(--text2);
+  max-width: 660px;
+  line-height: 1.65;
+}
+
+.group-label {
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+.sliders-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 48px;
+  max-width: 760px;
+  margin-bottom: 1.25rem;
+}
+.sliders-occ {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px 48px;
+  max-width: 900px;
+  margin-bottom: 1.5rem;
+}
+
+.ctrl-row { display: flex; align-items: center; gap: 10px; }
+.ctrl-label { font-size: 12px; color: var(--text2); width: 138px; flex-shrink: 0; }
+
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  flex: 1; height: 3px;
+  background: var(--surf2);
+  border-radius: 2px; outline: none;
+  border: 0.5px solid var(--border);
+  cursor: pointer; min-width: 60px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text2);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--text2);
+  cursor: pointer;
+}
+input[type=range]::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text2); border: 2px solid var(--surface); cursor: pointer;
+}
+.v-input::-webkit-slider-thumb   { background: #b03020 !important; box-shadow: 0 0 0 1px #b03020 !important; }
+.v-input::-moz-range-thumb       { background: #b03020 !important; }
+.mrt-input::-webkit-slider-thumb { background: #c06030 !important; box-shadow: 0 0 0 1px #c06030 !important; }
+.mrt-input::-moz-range-thumb     { background: #c06030 !important; }
+
+.ctrl-val {
+  font-size: 12px; font-family: var(--mono); font-weight: 500;
+  min-width: 60px; text-align: right; color: var(--text);
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 212px;
+  gap: 16px;
+  align-items: start;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  position: relative;
+}
+canvas#psych { width: 100%; display: block; }
+
+.tooltip {
+  position: absolute; pointer-events: none;
+  background: var(--surface); border: 0.5px solid var(--border2);
+  border-radius: 6px; padding: 6px 10px;
+  font-size: 11px; font-family: var(--mono); color: var(--text);
+  display: none; z-index: 20; white-space: nowrap;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+}
+
+.sidebar { display: flex; flex-direction: column; gap: 12px; }
+
+.side-card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.side-title {
+  font-size: 10px; font-family: var(--mono); letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text3); margin-bottom: 10px;
+}
+.band-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; color: var(--text2); }
+.band-row:last-of-type { margin-bottom: 0; }
+.swatch { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; border: 0.5px solid rgba(0,0,0,0.12); }
+
+.stat { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; color: var(--text2); padding: 3px 0; border-bottom: 0.5px solid var(--border); }
+.stat:last-child { border-bottom: none; }
+.stat-val { font-family: var(--mono); font-size: 11px; color: var(--text); }
+
+.key-row { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+.key-row:last-child { margin-bottom: 0; }
+
+footer {
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 0.5px solid var(--border);
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.8;
+}
+footer strong { color: var(--text2); font-weight: 500; }
+footer a { color: var(--text2); text-decoration: underline; text-underline-offset: 2px; }
+footer a:hover { color: var(--text); }
+.refs { display: flex; flex-direction: column; gap: 6px; }
+
+@media (max-width: 800px) {
+  .main-layout   { grid-template-columns: 1fr; }
+  .sliders-top   { grid-template-columns: 1fr; }
+  .sliders-occ   { grid-template-columns: 1fr 1fr; }
+  .sidebar       { flex-direction: row; flex-wrap: wrap; }
+  .side-card     { flex: 1 1 180px; }
+}
+@media (max-width: 500px) {
+  .sliders-occ   { grid-template-columns: 1fr; }
+  .ctrl-label    { width: 115px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="header-top">
+    <h1>Psychrometric heat imbalance chart</h1>
+    <span class="tag">NET HEAT STATE</span>
+    <span class="tag">FANGER PMV</span>
+  </div>
+  <p>Net heat imbalance (W/m²) across the psychrometric plane — metabolic heat production minus all body heat loss pathways — coloured by thermal stress band. Drag the air speed and MRT sliders to explore the 3-D comfort space.</p>
+</header>
+
+<div class="group-label">3-D slice controls</div>
+<div class="sliders-top">
+  <div class="ctrl-row">
+    <span class="ctrl-label">Air speed (m/s)</span>
+    <input type="range" class="v-input" id="vSlider" min="0.05" max="1.5" step="0.05" value="0.1">
+    <span class="ctrl-val" id="vVal">0.10</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">MRT (°C)</span>
+    <input type="range" class="mrt-input" id="mrtSlider" min="10" max="60" step="0.5" value="25">
+    <span class="ctrl-val" id="mrtVal">25.0</span>
+  </div>
+</div>
+
+<div class="group-label">Occupant parameters</div>
+<div class="sliders-occ">
+  <div class="ctrl-row">
+    <span class="ctrl-label">Metabolic rate (met)</span>
+    <input type="range" id="metSlider" min="0.8" max="4.0" step="0.1" value="1.2">
+    <span class="ctrl-val" id="metVal">1.2</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">Clothing (clo)</span>
+    <input type="range" id="cloSlider" min="0.0" max="2.0" step="0.05" value="0.5">
+    <span class="ctrl-val" id="cloVal">0.50</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">Skin wettedness</span>
+    <input type="range" id="wSlider" min="0.06" max="0.8" step="0.01" value="0.06">
+    <span class="ctrl-val" id="wVal">0.06</span>
+  </div>
+</div>
+
+<div class="main-layout">
+  <div class="chart-card">
+    <canvas id="psych" height="460"></canvas>
+    <div class="tooltip" id="tip"></div>
+  </div>
+
+  <div class="sidebar">
+
+    <div class="side-card">
+      <div class="side-title">Heat stress bands (W/m²)</div>
+      <div class="band-row"><span class="swatch" style="background:#8B0000;"></span><span>&ge; 180 — heat stress</span></div>
+      <div class="band-row"><span class="swatch" style="background:#e8806a;"></span><span>96 – 179 — mild stress</span></div>
+      <div class="band-row"><span class="swatch" style="background:#f5c4b8;"></span><span>34 – 95 — slightly warm</span></div>
+      <div class="band-row"><span class="swatch" style="background:#ffffff; border-color:rgba(0,0,0,0.2);"></span><span>−57 – 33 — neutral</span></div>
+      <div class="band-row"><span class="swatch" style="background:#b8d4f0;"></span><span>−119 – −58 — slightly cool</span></div>
+      <div class="band-row"><span class="swatch" style="background:#185FA5;"></span><span>−191 – −120 — cool stress</span></div>
+      <div class="band-row"><span class="swatch" style="background:#042C53;"></span><span>&le; −192 — cold stress</span></div>
+      <div style="margin-top:9px;padding-top:9px;border-top:0.5px solid var(--border);font-size:10px;color:var(--text3);">
+        Dashed lines = band boundaries
+      </div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-title">Cursor</div>
+      <div class="stat"><span>DBT</span><span class="stat-val" id="stDBT">—</span></div>
+      <div class="stat"><span>HR (g/kg)</span><span class="stat-val" id="stHR">—</span></div>
+      <div class="stat"><span>RH</span><span class="stat-val" id="stRH">—</span></div>
+      <div class="stat"><span>Imbalance</span><span class="stat-val" id="stIMB">—</span></div>
+      <div class="stat"><span>Band</span><span class="stat-val" id="stBAND">—</span></div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-title">Parameters</div>
+      <div class="stat"><span>Air speed</span><span class="stat-val" id="pV">—</span></div>
+      <div class="stat"><span>MRT</span><span class="stat-val" id="pMRT">—</span></div>
+      <div class="stat"><span>Met rate</span><span class="stat-val" id="pMet">—</span></div>
+      <div class="stat"><span>Clothing</span><span class="stat-val" id="pClo">—</span></div>
+      <div class="stat"><span>Skin wett.</span><span class="stat-val" id="pW">—</span></div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-title">Lines</div>
+      <div class="key-row"><span style="display:inline-block;width:24px;border-top:2px solid #1D9E75;flex-shrink:0;"></span><span>Saturation (RH 100%)</span></div>
+      <div class="key-row"><span style="display:inline-block;width:24px;border-top:1px solid rgba(20,130,80,0.45);flex-shrink:0;"></span><span>RH 20 / 40 / 60 / 80%</span></div>
+      <div class="key-row"><span style="display:inline-block;width:24px;border-top:1.5px dashed rgba(100,98,90,0.55);flex-shrink:0;"></span><span>Band boundaries</span></div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <div class="refs">
+    <div><strong>Heat balance model —</strong> Fanger, P.O. (1970). <em>Thermal Comfort: Analysis and Applications in Environmental Engineering.</em> Danish Technical Press, Copenhagen. Clothing surface temperature iteration and convective / radiative / evaporative heat loss terms.</div>
+    <div><strong>Expanded psychrometric chart —</strong> Teitelbaum, E., Jayathissa, P., Miller, C., &amp; Meggers, F. (2020). Design with Comfort: Expanding the psychrometric chart with radiation and convection dimensions. <em>Energy and Buildings,</em> 209, 109591. <a href="https://doi.org/10.1016/j.enbuild.2019.109591" target="_blank" rel="noopener">doi:10.1016/j.enbuild.2019.109591</a> · <a href="https://github.com/buds-lab/psychrometric-chart-makeover" target="_blank" rel="noopener">github.com/buds-lab/psychrometric-chart-makeover</a></div>
+    <div><strong>Net heat state &amp; thermal stress bands —</strong> Błażejczyk, K. (1987). Bioclimatic principles of recreational land use on the example of the Warsaw suburban zone. <em>Prace Geograficzne IGiPZ PAN,</em> 153. Institute of Geography and Spatial Organization, Polish Academy of Sciences, Warsaw. NHS thermal stress band thresholds (W/m²) adopted from the MENEX human heat balance model.</div>
+  </div>
+</footer>
+
+</div><!-- .app -->
+
+<script>
+(function(){
+'use strict';
+
+const DBT_MIN=10,DBT_MAX=40,HR_MIN=0,HR_MAX=30,PATM=101325;
+const NX=120,NY=100;
+
+const BANDS=[
+  {lo:-Infinity,hi:-192,label:'Cold stress',   r:4,  g:44, b:83 },
+  {lo:-191,     hi:-120,label:'Cool stress',   r:24, g:95, b:165},
+  {lo:-119,     hi:-58, label:'Slightly cool', r:184,g:212,b:240},
+  {lo:-57,      hi:33,  label:'Neutral',       r:255,g:255,b:255},
+  {lo:34,       hi:95,  label:'Slightly warm', r:245,g:196,b:184},
+  {lo:96,       hi:179, label:'Mild stress',   r:232,g:128,b:106},
+  {lo:180,      hi:Infinity,label:'Heat stress',r:139,g:0, b:0  },
+];
+const BOUNDARIES=[-192,-120,-58,34,96,180];
+
+function bandFor(imb){for(const b of BANDS)if(imb>=b.lo&&imb<=b.hi)return b;return BANDS[BANDS.length-1];}
+
+function satPressure(T){return 610.78*Math.exp(17.269*T/(237.3+T));}
+function hrFromRH(T,rh){const pw=rh/100*satPressure(T);return 1000*0.62198*pw/(PATM-pw);}
+function rhFromHR(T,hr){const w=hr/1000,pw=PATM*w/(0.62198+w);return Math.min(100,pw/satPressure(T)*100);}
+function hrSat(T){return hrFromRH(T,100);}
+
+function heatImbalance(Tdb,rh,v,mrt,met,clo,w){
+  const M=met*58.15,Icl=clo*0.155,pa=satPressure(Tdb)*rh/100,Tr=mrt;
+  const fcl=clo<=0.078?1+1.29*clo:1.05+0.645*clo;
+  const hcf=12.1*Math.sqrt(Math.max(v,0.01));
+  let Tcl=Tdb+(35.5-Tdb)/(3.5*(6.45*Icl+0.1));
+  for(let i=0;i<60;i++){
+    const hc=Math.max(hcf,2.38*Math.pow(Math.abs(Tcl-Tdb),0.25));
+    const Tcl2=35.7-0.028*M-Icl*(3.96e-8*fcl*(Math.pow(Tcl+273,4)-Math.pow(Tr+273,4))+fcl*hc*(Tcl-Tdb));
+    if(Math.abs(Tcl2-Tcl)<0.001)break;
+    Tcl=0.5*Tcl+0.5*Tcl2;
+  }
+  const hc=Math.max(hcf,2.38*Math.pow(Math.abs(Tcl-Tdb),0.25));
+  const Qsd=3.05e-3*(5733-6.99*M-pa);
+  return M-(
+    3.96e-8*fcl*(Math.pow(Tcl+273,4)-Math.pow(Tr+273,4))+
+    fcl*hc*(Tcl-Tdb)+
+    Qsd+w*Qsd*6+
+    0.42*(M-58.15)+
+    1.7e-5*M*(5867-pa)+
+    0.0014*M*(34-Tdb)
+  );
+}
+
+function gaussBlur(src,nx,ny,radius){
+  const r=Math.round(radius),sigma=radius/2;
+  const kernel=[];let ksum=0;
+  for(let k=-r;k<=r;k++){const v=Math.exp(-k*k/(2*sigma*sigma));kernel.push(v);ksum+=v;}
+  for(let i=0;i<kernel.length;i++)kernel[i]/=ksum;
+  const tmp=new Float32Array(src.length),dst=new Float32Array(src.length);
+  for(let iy=0;iy<ny;iy++)for(let ix=0;ix<nx;ix++){
+    if(isNaN(src[iy*nx+ix])){tmp[iy*nx+ix]=NaN;continue;}
+    let acc=0,wacc=0;
+    for(let k=-r;k<=r;k++){const jx=ix+k;if(jx<0||jx>=nx)continue;const v=src[iy*nx+jx];if(isNaN(v))continue;acc+=kernel[k+r]*v;wacc+=kernel[k+r];}
+    tmp[iy*nx+ix]=wacc>0?acc/wacc:NaN;
+  }
+  for(let iy=0;iy<ny;iy++)for(let ix=0;ix<nx;ix++){
+    if(isNaN(tmp[iy*nx+ix])){dst[iy*nx+ix]=NaN;continue;}
+    let acc=0,wacc=0;
+    for(let k=-r;k<=r;k++){const jy=iy+k;if(jy<0||jy>=ny)continue;const v=tmp[jy*nx+ix];if(isNaN(v))continue;acc+=kernel[k+r]*v;wacc+=kernel[k+r];}
+    dst[iy*nx+ix]=wacc>0?acc/wacc:NaN;
+  }
+  return dst;
+}
+
+function lerpBands(imb){
+  if(imb<=BANDS[0].hi)return[BANDS[0].r,BANDS[0].g,BANDS[0].b];
+  for(let i=1;i<BANDS.length;i++){
+    const b=BANDS[i],a=BANDS[i-1];
+    if(imb<=b.hi){const t=Math.max(0,Math.min(1,(imb-a.hi)/(b.hi-a.hi)));return[a.r+(b.r-a.r)*t,a.g+(b.g-a.g)*t,a.b+(b.b-a.b)*t];}
+  }
+  const l=BANDS[BANDS.length-1];return[l.r,l.g,l.b];
+}
+
+function marchSquares(grid,level){
+  const segs=[],lerp=(a,b,t)=>a+(b-a)*t;
+  for(let iy=0;iy<NY-1;iy++)for(let ix=0;ix<NX-1;ix++){
+    const v00=grid[iy*NX+ix],v10=grid[iy*NX+ix+1],v01=grid[(iy+1)*NX+ix],v11=grid[(iy+1)*NX+ix+1];
+    if(isNaN(v00)||isNaN(v10)||isNaN(v01)||isNaN(v11))continue;
+    const idx=(v00>level?8:0)|(v10>level?4:0)|(v11>level?2:0)|(v01>level?1:0);
+    if(idx===0||idx===15)continue;
+    const top=((idx>>3)&1)!==((idx>>2)&1),right=((idx>>2)&1)!==((idx>>1)&1);
+    const bot=((idx>>1)&1)!==(idx&1),left=(idx&1)!==((idx>>3)&1);
+    const ep=[];
+    if(top)  ep.push([lerp(ix,ix+1,(level-v00)/(v10-v00||1e-9)),iy]);
+    if(right)ep.push([ix+1,lerp(iy,iy+1,(level-v10)/(v11-v10||1e-9))]);
+    if(bot)  ep.push([lerp(ix,ix+1,(level-v01)/(v11-v01||1e-9)),iy+1]);
+    if(left) ep.push([ix,lerp(iy,iy+1,(level-v00)/(v01-v00||1e-9))]);
+    if(ep.length>=2){
+      if(idx===5||idx===10){segs.push([ep[0],ep[1]]);if(ep.length>2)segs.push([ep[2],ep[3]||ep[2]]);}
+      else for(let k=0;k+1<ep.length;k+=2)segs.push([ep[k],ep[k+1]]);
+    }
+  }
+  return segs;
+}
+
+const canvas=document.getElementById('psych'),ctx=canvas.getContext('2d'),tip=document.getElementById('tip');
+const PAD={l:58,r:18,t:18,b:50};
+
+function resize(){canvas.width=canvas.parentElement.clientWidth-24;canvas.height=460;}
+resize();
+
+let params={v:0.1,mrt:25,met:1.2,clo:0.5,w:0.06};
+let rawGrid=null,smoothGrid=null;
+
+function dbtToX(dbt){return PAD.l+(dbt-DBT_MIN)/(DBT_MAX-DBT_MIN)*(canvas.width-PAD.l-PAD.r);}
+function hrToY(hr){return PAD.t+(1-(hr-HR_MIN)/(HR_MAX-HR_MIN))*(canvas.height-PAD.t-PAD.b);}
+function xToDBT(x){return DBT_MIN+(x-PAD.l)/(canvas.width-PAD.l-PAD.r)*(DBT_MAX-DBT_MIN);}
+function yToHR(y){return HR_MIN+(1-(y-PAD.t)/(canvas.height-PAD.t-PAD.b))*(HR_MAX-HR_MIN);}
+
+function gridToCanvas(gx,gy){
+  return[dbtToX(DBT_MIN+gx/(NX-1)*(DBT_MAX-DBT_MIN)), hrToY(HR_MIN+gy/(NY-1)*(HR_MAX-HR_MIN))];
+}
+
+function buildSatClip(W,H){
+  const pts=[];
+  for(let i=0;i<=300;i++){
+    const dbt=DBT_MIN+i/300*(DBT_MAX-DBT_MIN),hr=Math.min(hrSat(dbt),HR_MAX);
+    pts.push([(dbt-DBT_MIN)/(DBT_MAX-DBT_MIN)*W,(1-(hr-HR_MIN)/(HR_MAX-HR_MIN))*H]);
+  }
+  pts.push([W,H],[0,H]);return pts;
+}
+
+function computeGrid(){
+  rawGrid=new Float32Array(NX*NY);
+  for(let iy=0;iy<NY;iy++){
+    const hr=HR_MIN+iy/(NY-1)*(HR_MAX-HR_MIN);
+    for(let ix=0;ix<NX;ix++){
+      const dbt=DBT_MIN+ix/(NX-1)*(DBT_MAX-DBT_MIN);
+      if(hr>hrSat(dbt)){rawGrid[iy*NX+ix]=NaN;continue;}
+      rawGrid[iy*NX+ix]=heatImbalance(dbt,rhFromHR(dbt,hr),params.v,params.mrt,params.met,params.clo,params.w);
+    }
+  }
+  smoothGrid=gaussBlur(rawGrid,NX,NY,3);
+}
+
+function isDark(){return matchMedia('(prefers-color-scheme: dark)').matches;}
+
+function draw(){
+  const W=canvas.width-PAD.l-PAD.r,H=canvas.height-PAD.t-PAD.b;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const dark=isDark();
+  const textColor=dark?'#c5c3bc':'#1a1917';
+  const gridColor=dark?'rgba(255,255,255,0.055)':'rgba(0,0,0,0.05)';
+  const axisColor=dark?'rgba(255,255,255,0.18)':'rgba(0,0,0,0.18)';
+  const rhLine  =dark?'rgba(80,190,140,0.35)':'rgba(15,110,70,0.38)';
+  const rhLabel =dark?'rgba(80,190,140,0.72)':'rgba(10,90,55,0.8)';
+
+  const satPts=buildSatClip(W,H);
+
+  ctx.save();
+  ctx.beginPath();ctx.rect(PAD.l,PAD.t,W,H);ctx.clip();
+  ctx.save();
+  ctx.beginPath();
+  satPts.forEach(([px,py],i)=>{const ax=PAD.l+px,ay=PAD.t+py;i===0?ctx.moveTo(ax,ay):ctx.lineTo(ax,ay);});
+  ctx.closePath();ctx.clip();
+
+  if(smoothGrid){
+    const off=document.createElement('canvas');
+    off.width=NX;off.height=NY;
+    const offCtx=off.getContext('2d');
+    const img=offCtx.createImageData(NX,NY);
+    const alpha=dark?215:195;
+    for(let iy=0;iy<NY;iy++){
+      const sr=NY-1-iy;
+      for(let ix=0;ix<NX;ix++){
+        const imb=smoothGrid[iy*NX+ix],i4=(sr*NX+ix)*4;
+        if(isNaN(imb)){img.data[i4+3]=0;continue;}
+        const[r,g,b]=lerpBands(imb);
+        img.data[i4]=Math.round(r);img.data[i4+1]=Math.round(g);img.data[i4+2]=Math.round(b);img.data[i4+3]=alpha;
+      }
+    }
+    offCtx.putImageData(img,0,0);
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(off,PAD.l,PAD.t,W,H);
+
+    ctx.setLineDash([6,4]);ctx.lineWidth=1.5;
+    ctx.strokeStyle=dark?'rgba(255,255,255,0.6)':'rgba(20,18,14,0.48)';
+    BOUNDARIES.forEach(lvl=>{
+      marchSquares(smoothGrid,lvl).forEach(([p1,p2])=>{
+        const[ax,ay]=gridToCanvas(p1[0],p1[1]),[bx,by]=gridToCanvas(p2[0],p2[1]);
+        ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();
+      });
+    });
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+
+  [20,40,60,80].forEach(rh=>{
+    ctx.beginPath();ctx.strokeStyle=rhLine;ctx.lineWidth=1;
+    let first=true;
+    for(let ix=0;ix<=W;ix+=2){
+      const dbt=xToDBT(PAD.l+ix),hr=hrFromRH(dbt,rh);
+      if(hr<HR_MIN||hr>HR_MAX){first=true;continue;}
+      const py=hrToY(hr);first?(ctx.moveTo(PAD.l+ix,py),first=false):ctx.lineTo(PAD.l+ix,py);
+    }
+    ctx.stroke();
+    const lhr=hrFromRH(37,rh);
+    if(lhr>=HR_MIN&&lhr<=HR_MAX){
+      ctx.fillStyle=rhLabel;ctx.font='10px "DM Mono",monospace';ctx.textAlign='left';
+      ctx.fillText(rh+'%',dbtToX(37)+3,hrToY(lhr)-3);
+    }
+  });
+
+  ctx.beginPath();ctx.strokeStyle='#1D9E75';ctx.lineWidth=2;ctx.setLineDash([]);
+  let first=true;
+  for(let ix=0;ix<=W;ix++){
+    const dbt=xToDBT(PAD.l+ix),hr=hrSat(dbt);
+    if(hr>HR_MAX+0.1){first=true;continue;}
+    const py=hrToY(Math.min(hr,HR_MAX));first?(ctx.moveTo(PAD.l+ix,py),first=false):ctx.lineTo(PAD.l+ix,py);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.strokeStyle=axisColor;ctx.lineWidth=0.5;ctx.strokeRect(PAD.l,PAD.t,W,H);
+
+  ctx.font='11px "DM Mono",monospace';ctx.textAlign='center';
+  [10,15,20,25,30,35,40].forEach(t=>{
+    const x=dbtToX(t);
+    ctx.beginPath();ctx.moveTo(x,PAD.t+H);ctx.lineTo(x,PAD.t+H+5);ctx.strokeStyle=axisColor;ctx.lineWidth=0.5;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,PAD.t);ctx.lineTo(x,PAD.t+H);ctx.strokeStyle=gridColor;ctx.lineWidth=0.5;ctx.stroke();
+    ctx.fillStyle=textColor;ctx.fillText(t+'°C',x,PAD.t+H+16);
+  });
+  ctx.textAlign='right';
+  [0,5,10,15,20,25,30].forEach(hr=>{
+    const y=hrToY(hr);
+    ctx.beginPath();ctx.moveTo(PAD.l-5,y);ctx.lineTo(PAD.l,y);ctx.strokeStyle=axisColor;ctx.lineWidth=0.5;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(PAD.l+W,y);ctx.strokeStyle=gridColor;ctx.lineWidth=0.5;ctx.stroke();
+    ctx.fillStyle=textColor;ctx.fillText(hr,PAD.l-8,y+4);
+  });
+  ctx.save();
+  ctx.translate(15,PAD.t+H/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';
+  ctx.fillStyle=textColor;ctx.font='11px "DM Mono",monospace';
+  ctx.fillText('Humidity ratio (g/kg)',0,0);
+  ctx.restore();
+  ctx.textAlign='center';ctx.fillStyle=textColor;ctx.font='11px "DM Mono",monospace';
+  ctx.fillText('Dry-bulb temperature (°C)',PAD.l+W/2,canvas.height-8);
+}
+
+function updateParams(){
+  document.getElementById('pV').textContent  =params.v.toFixed(2)  +' m/s';
+  document.getElementById('pMRT').textContent=params.mrt.toFixed(1)+' °C';
+  document.getElementById('pMet').textContent=params.met.toFixed(1)+' met';
+  document.getElementById('pClo').textContent=params.clo.toFixed(2)+' clo';
+  document.getElementById('pW').textContent  =params.w.toFixed(2);
+}
+
+function recompute(){computeGrid();draw();updateParams();}
+
+function bind(id,outId,key,fmt){
+  document.getElementById(id).addEventListener('input',e=>{
+    params[key]=parseFloat(e.target.value);
+    document.getElementById(outId).textContent=fmt(params[key]);
+    recompute();
+  });
+}
+bind('vSlider',  'vVal',  'v',  v=>v.toFixed(2));
+bind('mrtSlider','mrtVal','mrt',m=>m.toFixed(1));
+bind('metSlider','metVal','met',m=>m.toFixed(1));
+bind('cloSlider','cloVal','clo',c=>c.toFixed(2));
+bind('wSlider',  'wVal',  'w',  w=>w.toFixed(2));
+
+canvas.addEventListener('mousemove',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const cx=(e.clientX-rect.left)*canvas.width/rect.width;
+  const cy=(e.clientY-rect.top)*canvas.height/rect.height;
+  const dbt=xToDBT(cx),hr=yToHR(cy);
+  if(dbt<DBT_MIN||dbt>DBT_MAX||hr<HR_MIN||hr>HR_MAX||hr>hrSat(dbt)+0.2){tip.style.display='none';return;}
+  const rh=rhFromHR(dbt,hr);
+  const ix=Math.round((dbt-DBT_MIN)/(DBT_MAX-DBT_MIN)*(NX-1));
+  const iy=Math.round((hr -HR_MIN) /(HR_MAX -HR_MIN) *(NY-1));
+  const imb=rawGrid?rawGrid[iy*NX+ix]:NaN;
+  const band=isNaN(imb)?'—':bandFor(imb).label;
+  document.getElementById('stDBT').textContent =dbt.toFixed(1)+' °C';
+  document.getElementById('stHR').textContent  =hr.toFixed(1) +' g/kg';
+  document.getElementById('stRH').textContent  =rh.toFixed(0) +'%';
+  document.getElementById('stIMB').textContent =isNaN(imb)?'—':imb.toFixed(0)+' W/m²';
+  document.getElementById('stBAND').textContent=band;
+  tip.style.left   =(e.clientX-rect.left+14)+'px';
+  tip.style.top    =(e.clientY-rect.top -38)+'px';
+  tip.style.display='block';
+  tip.textContent  =`${dbt.toFixed(1)}°C · ${hr.toFixed(1)} g/kg · ${rh.toFixed(0)}% → ${isNaN(imb)?'—':imb.toFixed(0)+' W/m²'} (${band})`;
+});
+canvas.addEventListener('mouseleave',()=>{tip.style.display='none';});
+window.addEventListener('resize',()=>{resize();draw();});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>draw());
+
+recompute();
+})();
+</script>
+</body>
+</html>
