@@ -399,7 +399,7 @@ footer a:hover{color:var(--text);}
   <div class="mode-bar-inner">
     <button class="mode-btn active" id="btnStandard" onclick="setMode('standard')">STANDARD</button>
     <div class="mode-divider"></div>
-    <button class="mode-btn" id="btnAdvanced" onclick="setMode('advanced')">ADVANCED EXPLORER (BETA)</button>
+    <button class="mode-btn" id="btnAdvanced" onclick="setMode('advanced')">ADVANCED EXPLORER</button>
   </div>
 </div>
 
@@ -551,11 +551,21 @@ footer a:hover{color:var(--text);}
       <span class="picker-step">Z axis</span>
       <div class="axis-chips" id="zChips"></div>
     </div>
-    <div id="zSliderWrap" style="display:none;max-width:480px;margin:0.75rem 0 0;">
-      <div class="ctrl-row">
-        <span class="ctrl-label" id="zSliderLabel" style="color:var(--accent);">Z slice</span>
+    <div id="zSliderWrap" style="display:none;max-width:640px;margin:0.75rem 0 0;">
+      <div class="ctrl-row" style="margin-bottom:6px;">
+        <span class="ctrl-label" id="zSliderLabel" style="color:var(--accent);width:160px;flex-shrink:0;">Z slice</span>
         <input type="range" id="zSlider" style="flex:1;">
         <span class="ctrl-val" id="zSliderVal" style="color:var(--accent);">—</span>
+      </div>
+      <div class="ctrl-row" style="margin-bottom:6px;">
+        <span class="ctrl-label" id="xSliderLabel" style="color:#185FA5;width:160px;flex-shrink:0;">X slice</span>
+        <input type="range" id="xSlider" style="flex:1;">
+        <span class="ctrl-val" id="xSliderVal" style="color:#185FA5;">—</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label" id="ySliderLabel" style="color:#1D9E75;width:160px;flex-shrink:0;">Y slice</span>
+        <input type="range" id="ySlider" style="flex:1;">
+        <span class="ctrl-val" id="ySliderVal" style="color:#1D9E75;">—</span>
       </div>
     </div>
   </div>
@@ -675,7 +685,7 @@ function heatImbalance(Tdb,rh,v,mrt,met,w){
   );
 }
 
-const canvas=document.getElementById('psych'),ctx=canvas.getContext('2d'),tip=document.getElementById('adv-tip');
+const canvas=document.getElementById('psych'),ctx=canvas.getContext('2d'),tip=document.getElementById('tip');
 const PAD={l:58,r:18,t:18,b:50};
 
 function resize(){canvas.width=canvas.parentElement.clientWidth-24;canvas.height=460;}
@@ -880,8 +890,8 @@ canvas.addEventListener('mousemove',e=>{
   document.getElementById('stDBT').textContent =dbt.toFixed(1)+' °C';
   document.getElementById('stHR').textContent  =hr.toFixed(1);
   document.getElementById('stRH').textContent  =rh.toFixed(0) +'%';
-  document.getElementById('adv-stIMB').textContent =isNaN(imb)?'—':imb.toFixed(0)+' W/m²';
-  document.getElementById('adv-stBAND').textContent=band;
+  document.getElementById('stIMB').textContent =isNaN(imb)?'—':imb.toFixed(0)+' W/m²';
+  document.getElementById('stBAND').textContent=band;
   tip.style.left   =(e.clientX-rect.left+14)+'px';
   tip.style.top    =(e.clientY-rect.top -38)+'px';
   tip.style.display='block';
@@ -1005,7 +1015,7 @@ function isPsychXY(){ return xKey==='dbt'&&yKey==='rh'; }
 
 /* Virtual hr axis descriptor used only when isPsychXY() */
 const HR_AXIS={min:0,max:28,ticks:[0,5,10,15,20,25],
-  tickFmt:v=>v, label:'Humidity ratio', unit:'g/kg'};
+  tickFmt:v=>v, fmt:v=>v.toFixed(1)+' g/kg', label:'Humidity ratio', unit:'g/kg'};
 
 /* ── Canvas setup ── */
 const canvas=document.getElementById('chart');
@@ -1348,7 +1358,8 @@ buildSliders();
    ══════════════════════════════════════════════ */
 const NZ3=20;
 let threeScene=null,threeCamera=null,threeRenderer=null,threeLcanvas=null,threeLctx=null;
-let volMesh=null,sliceMesh3=null;
+let volMesh=null,sliceMesh3=null,xSliceMesh=null,ySliceMesh=null;
+let xSliceVal=null,ySliceVal=null;
 let th3=0.9,ph3=0.5,rad3=3.0,drag3=false,lx3=0,ly3=0;
 const dpr3=Math.min(window.devicePixelRatio||1,2);
 
@@ -1410,6 +1421,10 @@ function sliceIdx3(){
   const d=DMAP[zKey];
   return Math.round((P[zKey]-d.min)/(d.max-d.min)*(NZ3-1));
 }
+function sliceIdxForVal(key,val,n){
+  const d=key===yKey&&isPsychXY()?HR_AXIS:DMAP[key];
+  return Math.round((val-d.min)/(d.max-d.min)*(n-1));
+}
 
 /* Get the effective RH for a grid point, handling the isPsychXY special case */
 function getRH(pp,xV,yV){
@@ -1435,16 +1450,20 @@ function getRH(pp,xV,yV){
 
 function build3D(){
   if(!threeScene)return;
-  if(volMesh){threeScene.remove(volMesh);volMesh.geometry.dispose();volMesh.material.dispose();}
-  if(sliceMesh3){threeScene.remove(sliceMesh3);sliceMesh3.geometry.dispose();sliceMesh3.material.dispose();}
+  for(const m of [volMesh,sliceMesh3,xSliceMesh,ySliceMesh]){
+    if(m){threeScene.remove(m);m.geometry.dispose();m.material.dispose();}
+  }
+  volMesh=sliceMesh3=xSliceMesh=ySliceMesh=null;
 
   const dzd=DMAP[zKey];
   const dxd=DMAP[xKey];
-  // Y range: if isPsychXY use HR_AXIS, else use DMAP[yKey]
   const dyd=isPsychXY()?HR_AXIS:DMAP[yKey];
   const NXv=30,NYv=22;
-  const idx=sliceIdx3();
-  const vp=[],vc=[],sp=[],sc=[];
+  const zIdx=sliceIdx3();
+  const xIdx=xSliceVal!==null?sliceIdxForVal(xKey,xSliceVal,NXv):null;
+  const yIdx=ySliceVal!==null?sliceIdxForVal(yKey,ySliceVal,NYv):null;
+
+  const vp=[],vc=[],sp=[],sc=[],xp=[],xc=[],yp=[],yc=[];
 
   for(let iz=0;iz<NZ3;iz++){
     const zVal=dzd.min+(iz/(NZ3-1))*(dzd.max-dzd.min);
@@ -1454,30 +1473,38 @@ function build3D(){
       for(let ix=0;ix<NXv;ix++){
         const xVal=dxd.min+(ix/(NXv-1))*(dxd.max-dxd.min);
         const pp={...P,[xKey]:xVal,[yKey]:yVal,[zKey]:zVal};
-        // resolve dbt
         const dbt=pp.dbt;
         const rh=getRH(pp,xVal,yVal);
         if(rh===null)continue;
         const imb=heatImbalance(dbt,rh,pp.v,effectiveMRT(dbt),pp.met,pp.w);
         const[r,g,b]=bandRgb(imb);
-        const x=(ix/(NXv-1))-0.5,y=(iy/(NYv-1))-0.5;
-        if(iz===idx){sp.push(x,y,z);sc.push(r/255,g/255,b/255);}
-        else{vp.push(x,y,z);vc.push(r/255,g/255,b/255);}
+        const xn=(ix/(NXv-1))-0.5,yn=(iy/(NYv-1))-0.5;
+        const onZ=iz===zIdx, onX=xIdx!==null&&ix===xIdx, onY=yIdx!==null&&iy===yIdx;
+        if(onZ){sp.push(xn,yn,z);sc.push(r/255,g/255,b/255);}
+        else if(onX){xp.push(xn,yn,z);xc.push(r/255,g/255,b/255);}
+        else if(onY){yp.push(xn,yn,z);yc.push(r/255,g/255,b/255);}
+        else{vp.push(xn,yn,z);vc.push(r/255,g/255,b/255);}
       }
     }
+  }
+
+  function makePts(pos,col,size,order){
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+    const m=new THREE.Points(g,new THREE.PointsMaterial({size,vertexColors:true,transparent:false,sizeAttenuation:true,depthWrite:true}));
+    m.renderOrder=order;threeScene.add(m);return m;
   }
 
   const vg=new THREE.BufferGeometry();
   vg.setAttribute('position',new THREE.Float32BufferAttribute(vp,3));
   vg.setAttribute('color',new THREE.Float32BufferAttribute(vc,3));
-  volMesh=new THREE.Points(vg,new THREE.PointsMaterial({size:0.062,vertexColors:true,transparent:true,opacity:0.20,sizeAttenuation:true,depthWrite:false}));
+  volMesh=new THREE.Points(vg,new THREE.PointsMaterial({size:0.055,vertexColors:true,transparent:true,opacity:0.18,sizeAttenuation:true,depthWrite:false}));
   threeScene.add(volMesh);
 
-  const sg=new THREE.BufferGeometry();
-  sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
-  sg.setAttribute('color',new THREE.Float32BufferAttribute(sc,3));
-  sliceMesh3=new THREE.Points(sg,new THREE.PointsMaterial({size:0.072,vertexColors:true,transparent:false,sizeAttenuation:true,depthWrite:true}));
-  sliceMesh3.renderOrder=1;threeScene.add(sliceMesh3);
+  if(sp.length)sliceMesh3=makePts(sp,sc,0.072,3);
+  if(xp.length)xSliceMesh=makePts(xp,xc,0.068,2);
+  if(yp.length)ySliceMesh=makePts(yp,yc,0.068,1);
 }
 
 function buildAxes3(){
@@ -1498,6 +1525,26 @@ function buildAxes3(){
     const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(e[0],e[1],e[2]),new THREE.Vector3(e[3],e[4],e[5])]);
     const l=new THREE.Line(g,am);l.userData.ax3=true;threeScene.add(l);
   });
+  if(xSliceVal!==null){
+    const NXv=30,dxd=DMAP[xKey];
+    const xi=sliceIdxForVal(xKey,xSliceVal,NXv);
+    const sx=(xi/(NXv-1))-0.5;
+    const bm=new THREE.LineBasicMaterial({color:0x185FA5,transparent:true,opacity:0.9});
+    [[sx,-0.5,-0.5,sx,0.5,-0.5],[sx,0.5,-0.5,sx,0.5,0.5],[sx,0.5,0.5,sx,-0.5,0.5],[sx,-0.5,0.5,sx,-0.5,-0.5]].forEach(e=>{
+      const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(e[0],e[1],e[2]),new THREE.Vector3(e[3],e[4],e[5])]);
+      const l=new THREE.Line(g,bm);l.userData.ax3=true;threeScene.add(l);
+    });
+  }
+  if(ySliceVal!==null){
+    const NYv=22,dyd=isPsychXY()?HR_AXIS:DMAP[yKey];
+    const yi=sliceIdxForVal(yKey,ySliceVal,NYv);
+    const sy=(yi/(NYv-1))-0.5;
+    const gm=new THREE.LineBasicMaterial({color:0x1D9E75,transparent:true,opacity:0.9});
+    [[-0.5,sy,-0.5,0.5,sy,-0.5],[0.5,sy,-0.5,0.5,sy,0.5],[0.5,sy,0.5,-0.5,sy,0.5],[-0.5,sy,0.5,-0.5,sy,-0.5]].forEach(e=>{
+      const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(e[0],e[1],e[2]),new THREE.Vector3(e[3],e[4],e[5])]);
+      const l=new THREE.Line(g,gm);l.userData.ax3=true;threeScene.add(l);
+    });
+  }
 }
 
 function proj3(x,y,z){
@@ -1555,12 +1602,29 @@ function drawLabels3(){
   threeLctx.fillStyle=dim;threeLctx.textAlign='center';threeLctx.textBaseline='middle';
   threeLctx.fillText(dimLabel(zKey)+(dzd.unit?' ('+dzd.unit+')':''),0,0);threeLctx.restore();}
 
-  // Slice label
+  // Z slice label
   const sz=(sliceIdx3()/(NZ3-1))-0.5;
   const[px,py]=proj3(0,-0.62,sz);
   threeLctx.fillStyle='#c06030';threeLctx.textAlign='center';threeLctx.textBaseline='middle';
   threeLctx.font=`500 ${fs}px 'DM Mono',monospace`;
   threeLctx.fillText(dzd.fmt(P[zKey]),px,py);
+  // X slice label
+  if(xSliceVal!==null){
+    const NXv=30,xi=sliceIdxForVal(xKey,xSliceVal,NXv);
+    const sx=(xi/(NXv-1))-0.5;
+    const[lx,ly]=proj3(sx,0.62,-0.5);
+    threeLctx.fillStyle='#185FA5';threeLctx.textAlign='center';threeLctx.textBaseline='middle';
+    threeLctx.fillText(dxd.fmt(xSliceVal),lx,ly);
+  }
+  // Y slice label
+  if(ySliceVal!==null){
+    const NYv=22,dyd2=isPsychXY()?HR_AXIS:DMAP[yKey];
+    const yi=sliceIdxForVal(yKey,ySliceVal,NYv);
+    const sy=(yi/(NYv-1))-0.5;
+    const[lx,ly]=proj3(0.62,sy,-0.5);
+    threeLctx.fillStyle='#1D9E75';threeLctx.textAlign='left';threeLctx.textBaseline='middle';
+    threeLctx.fillText(dyd2.fmt(ySliceVal),lx,ly);
+  }
 }
 
 function render3D(){
@@ -1598,17 +1662,47 @@ function buildZSlider(){
   const wrap=document.getElementById('zSliderWrap');
   if(!zKey){wrap.style.display='none';return;}
   wrap.style.display='block';
-  const d=DMAP[zKey];
-  const sl=document.getElementById('zSlider');
-  sl.min=d.min;sl.max=d.max;sl.step=d.step;sl.value=P[zKey];
-  document.getElementById('zSliderLabel').textContent=d.label+' — Z slice';
-  document.getElementById('zSliderVal').textContent=d.fmt(P[zKey]);
-  sl.oninput=()=>{
-    P[zKey]=parseFloat(sl.value);
-    document.getElementById('zSliderVal').textContent=d.fmt(P[zKey]);
+
+  // Z slider
+  const dz=DMAP[zKey];
+  const slZ=document.getElementById('zSlider');
+  slZ.min=dz.min;slZ.max=dz.max;slZ.step=dz.step;slZ.value=P[zKey];
+  document.getElementById('zSliderLabel').textContent=dimLabel(zKey)+' — Z slice';
+  document.getElementById('zSliderVal').textContent=dz.fmt(P[zKey]);
+  slZ.oninput=()=>{
+    P[zKey]=parseFloat(slZ.value);
+    document.getElementById('zSliderVal').textContent=dz.fmt(P[zKey]);
     if(use3D){build3D();buildAxes3();render3D();}
-    // also recompute 2D to keep slice in sync? No — the 2D chart is at the
-    // fixed slider values; zKey is the 3D dimension only.
+  };
+
+  // X slice slider
+  const dx=DMAP[xKey];
+  const slX=document.getElementById('xSlider');
+  slX.min=dx.min;slX.max=dx.max;slX.step=dx.step;
+  xSliceVal=xSliceVal!==null?Math.max(dx.min,Math.min(dx.max,xSliceVal)):(dx.min+dx.max)/2;
+  slX.value=xSliceVal;
+  document.getElementById('xSliderLabel').textContent=dimLabel(xKey)+' — X slice';
+  document.getElementById('xSliderVal').textContent=dx.fmt(xSliceVal);
+  slX.oninput=()=>{
+    xSliceVal=parseFloat(slX.value);
+    document.getElementById('xSliderVal').textContent=dx.fmt(xSliceVal);
+    if(use3D){build3D();buildAxes3();render3D();}
+  };
+
+  // Y slice slider
+  const dyRaw=isPsychXY()?HR_AXIS:DMAP[yKey];
+  const slY=document.getElementById('ySlider');
+  slY.min=dyRaw.min;slY.max=dyRaw.max;slY.step=isPsychXY()?0.5:(DMAP[yKey]?.step||0.5);
+  ySliceVal=ySliceVal!==null?Math.max(dyRaw.min,Math.min(dyRaw.max,ySliceVal)):(dyRaw.min+dyRaw.max)/2;
+  slY.value=ySliceVal;
+  const yLabelStr=isPsychXY()?HR_AXIS.label:dimLabel(yKey);
+  document.getElementById('ySliderLabel').textContent=yLabelStr+' — Y slice';
+  document.getElementById('ySliderVal').textContent=isPsychXY()?HR_AXIS.fmt(ySliceVal):DMAP[yKey].fmt(ySliceVal);
+  slY.oninput=()=>{
+    ySliceVal=parseFloat(slY.value);
+    const fmtY=isPsychXY()?HR_AXIS.fmt(ySliceVal):DMAP[yKey].fmt(ySliceVal);
+    document.getElementById('ySliderVal').textContent=fmtY;
+    if(use3D){build3D();buildAxes3();render3D();}
   };
 }
 
