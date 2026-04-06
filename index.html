@@ -204,12 +204,63 @@ footer a { color: var(--text2); text-decoration: underline; text-underline-offse
 footer a:hover { color: var(--text); }
 .refs { display: flex; flex-direction: column; gap: 6px; }
 
+/* ── Toggle switch ── */
+.toggle-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.toggle-label {
+  font-size: 12px; color: var(--text2);
+}
+.toggle-switch {
+  position: relative; display: inline-block;
+  width: 34px; height: 19px; flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute; inset: 0; border-radius: 19px;
+  background: var(--surf2); border: 0.5px solid var(--border2);
+  cursor: pointer; transition: background 0.18s;
+}
+.toggle-track::after {
+  content: ''; position: absolute;
+  left: 3px; top: 3px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--text3); transition: left 0.18s, background 0.18s;
+}
+.toggle-switch input:checked + .toggle-track { background: #c06030; border-color: #c06030; }
+.toggle-switch input:checked + .toggle-track::after { left: 18px; background: #fff; }
+
+/* ── Radiant env panel ── */
+.radiant-panel {
+  display: none;
+  background: var(--surf2);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 12px 14px 10px;
+  margin-bottom: 1.25rem;
+  max-width: 760px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.radiant-panel .ctrl-val { min-width: 52px; }
+.radiant-panel.active { display: block; }
+.radiant-panel .group-label { margin-bottom: 10px; color: #c06030; }
+.radiant-sliders {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+}
+.rad-input::-webkit-slider-thumb { background: #c06030 !important; box-shadow: 0 0 0 1px #c06030 !important; }
+.rad-input::-moz-range-thumb     { background: #c06030 !important; }
+
 @media (max-width: 800px) {
-  .main-layout   { grid-template-columns: 1fr; }
-  .sliders-top   { grid-template-columns: 1fr; }
-  .sliders-occ   { grid-template-columns: 1fr; }
-  .sidebar       { flex-direction: row; flex-wrap: wrap; }
-  .side-card     { flex: 1 1 180px; }
+  .main-layout        { grid-template-columns: 1fr; }
+  .sliders-top        { grid-template-columns: 1fr; }
+  .sliders-occ        { grid-template-columns: 1fr; }
+  .radiant-sliders    { grid-template-columns: 1fr; }
+  .sidebar            { flex-direction: row; flex-wrap: wrap; }
+  .side-card          { flex: 1 1 180px; }
 }
 </style>
 </head>
@@ -231,10 +282,36 @@ footer a:hover { color: var(--text); }
     <input type="range" class="v-input" id="vSlider" min="0.05" max="1.5" step="0.05" value="0.1">
     <span class="ctrl-val" id="vVal">0.10</span>
   </div>
-  <div class="ctrl-row">
+  <div id="mrtRow" class="ctrl-row">
     <span class="ctrl-label">MRT (°C)</span>
     <input type="range" class="mrt-input" id="mrtSlider" min="10" max="60" step="0.5" value="25">
     <span class="ctrl-val" id="mrtVal">25.0</span>
+  </div>
+</div>
+
+<!-- Radiant environment toggle -->
+<div class="toggle-row">
+  <label class="toggle-switch">
+    <input type="checkbox" id="radToggle">
+    <span class="toggle-track"></span>
+  </label>
+  <span class="toggle-label">Radiant environment specification</span>
+</div>
+
+<!-- Radiant environment panel (shown when toggle is on) -->
+<div class="radiant-panel" id="radiantPanel">
+  <div class="group-label">Radiant environment</div>
+  <div class="radiant-sliders">
+    <div class="ctrl-row">
+      <span class="ctrl-label">Active radiant temp. (°C)</span>
+      <input type="range" class="rad-input" id="radTempSlider" min="0" max="60" step="0.5" value="25">
+      <span class="ctrl-val" id="radTempVal">25.0 °C</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">View factor (%)</span>
+      <input type="range" class="rad-input" id="radVFSlider" min="0" max="100" step="1" value="50">
+      <span class="ctrl-val" id="radVFVal">50%</span>
+    </div>
   </div>
 </div>
 
@@ -350,7 +427,13 @@ function resize(){canvas.width=canvas.parentElement.clientWidth-24;canvas.height
 resize();
 
 let params={v:0.1,mrt:25,met:1.2,w:0.06};
+let radParams={radTemp:25,radVF:0.5,useRadiant:false};
 let rawGrid=null;
+
+function effectiveMRT(airTemp){
+  if(!radParams.useRadiant) return params.mrt;
+  return radParams.radVF*radParams.radTemp + (1-radParams.radVF)*airTemp;
+}
 
 function dbtToX(dbt){return PAD.l+(dbt-DBT_MIN)/(DBT_MAX-DBT_MIN)*(canvas.width-PAD.l-PAD.r);}
 function hrToY(hr){return PAD.t+(1-(hr-HR_MIN)/(HR_MAX-HR_MIN))*(canvas.height-PAD.t-PAD.b);}
@@ -374,7 +457,7 @@ function computeGrid(){
     for(let ix=0;ix<NX;ix++){
       const dbt=DBT_MIN+ix/(NX-1)*(DBT_MAX-DBT_MIN);
       if(hr>hrSat(dbt)){rawGrid[iy*NX+ix]=NaN;continue;}
-      rawGrid[iy*NX+ix]=heatImbalance(dbt,rhFromHR(dbt,hr),params.v,params.mrt,params.met,params.w);
+      rawGrid[iy*NX+ix]=heatImbalance(dbt,rhFromHR(dbt,hr),params.v,effectiveMRT(dbt),params.met,params.w);
     }
   }
 }
@@ -481,12 +564,7 @@ function draw(){
   ctx.fillText('Dry-bulb temperature (°C)',PAD.l+W/2,canvas.height-8);
 }
 
-function updateParams(){
-  document.getElementById('pV').textContent  =params.v.toFixed(2)  +' m/s';
-  document.getElementById('pMRT').textContent=params.mrt.toFixed(1)+' °C';
-  document.getElementById('pMet').textContent=params.met.toFixed(1)+' met';
-  document.getElementById('pW').textContent  =params.w.toFixed(2);
-}
+function updateParams(){}
 
 function recompute(){computeGrid();draw();updateParams();}
 
@@ -502,6 +580,37 @@ bind('mrtSlider','mrtVal','mrt',m=>m.toFixed(1));
 bind('metSlider','metVal','met',m=>m.toFixed(1));
 bind('wSlider',  'wVal',  'w',  w=>w.toFixed(2));
 
+// Radiant toggle
+document.getElementById('radToggle').addEventListener('change',e=>{
+  radParams.useRadiant=e.target.checked;
+  const panel=document.getElementById('radiantPanel');
+  const mrtRow=document.getElementById('mrtRow');
+  if(radParams.useRadiant){
+    panel.classList.add('active');
+    mrtRow.style.opacity='0.35';
+    mrtRow.style.pointerEvents='none';
+  } else {
+    panel.classList.remove('active');
+    mrtRow.style.opacity='';
+    mrtRow.style.pointerEvents='';
+  }
+  recompute();
+});
+
+// Active radiant temperature slider
+document.getElementById('radTempSlider').addEventListener('input',e=>{
+  radParams.radTemp=parseFloat(e.target.value);
+  document.getElementById('radTempVal').textContent=radParams.radTemp.toFixed(1)+' °C';
+  recompute();
+});
+
+// View factor slider
+document.getElementById('radVFSlider').addEventListener('input',e=>{
+  radParams.radVF=parseFloat(e.target.value)/100;
+  document.getElementById('radVFVal').textContent=Math.round(radParams.radVF*100)+'%';
+  recompute();
+});
+
 canvas.addEventListener('mousemove',e=>{
   const rect=canvas.getBoundingClientRect();
   const cx=(e.clientX-rect.left)*canvas.width/rect.width;
@@ -514,14 +623,17 @@ canvas.addEventListener('mousemove',e=>{
   const imb=rawGrid?rawGrid[iy*NX+ix]:NaN;
   const band=isNaN(imb)?'—':bandFor(imb).label;
   document.getElementById('stDBT').textContent =dbt.toFixed(1)+' °C';
-  document.getElementById('stHR').textContent  =hr.toFixed(1) +' g/kg';
+  document.getElementById('stHR').textContent  =hr.toFixed(1);
   document.getElementById('stRH').textContent  =rh.toFixed(0) +'%';
   document.getElementById('stIMB').textContent =isNaN(imb)?'—':imb.toFixed(0)+' W/m²';
   document.getElementById('stBAND').textContent=band;
   tip.style.left   =(e.clientX-rect.left+14)+'px';
   tip.style.top    =(e.clientY-rect.top -38)+'px';
   tip.style.display='block';
-  tip.textContent  =`${dbt.toFixed(1)}°C · ${hr.toFixed(1)} g/kg · ${rh.toFixed(0)}% → ${isNaN(imb)?'—':imb.toFixed(0)+' W/m²'} (${band})`;
+  const mrtTip=radParams.useRadiant
+    ? effectiveMRT(dbt).toFixed(1)
+    : params.mrt.toFixed(1);
+  tip.textContent=`${dbt.toFixed(1)}°C · ${hr.toFixed(1)} g/kg · ${rh.toFixed(0)}% · MRT ${mrtTip}°C → ${isNaN(imb)?'—':imb.toFixed(0)+' W/m²'} (${band})`;
 });
 canvas.addEventListener('mouseleave',()=>{tip.style.display='none';});
 window.addEventListener('resize',()=>{resize();draw();});
