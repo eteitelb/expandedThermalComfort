@@ -1244,8 +1244,9 @@ function buildChips(){
     xChip.textContent=dimLabel(d.key)+(d.unit?' ('+d.unit+')':'');
     xChip.addEventListener('click',()=>{
       if(yKey===d.key)return;
-      xKey=d.key;buildChips();buildSliders();
+      xKey=d.key;xSliceVal=null;ySliceVal=null;buildChips();buildSliders();
       if(xKey&&yKey){showChart();recompute();}
+      if(use3D&&zKey)buildZSlider();
     });
     xEl.appendChild(xChip);
 
@@ -1255,8 +1256,9 @@ function buildChips(){
     yChip.textContent=dimLabel(d.key)+(d.unit?' ('+d.unit+')':'');
     yChip.addEventListener('click',()=>{
       if(xKey===d.key)return;
-      yKey=d.key;buildChips();buildSliders();
+      yKey=d.key;xSliceVal=null;ySliceVal=null;buildChips();buildSliders();
       if(xKey&&yKey){showChart();recompute();}
+      if(use3D&&zKey)buildZSlider();
     });
     yEl.appendChild(yChip);
   });
@@ -1649,6 +1651,7 @@ function buildZChips(){
     chip.textContent=dimLabel(d.key)+(d.unit?' ('+d.unit+')':'');
     chip.addEventListener('click',()=>{
       zKey=d.key;
+      xSliceVal=null;ySliceVal=null;
       buildZChips();
       buildSliders(); // rebuild sliders — remaining fixed dims
       buildZSlider();
@@ -1663,47 +1666,57 @@ function buildZSlider(){
   if(!zKey){wrap.style.display='none';return;}
   wrap.style.display='block';
 
-  // Z slider
+  function wireSlider(oldId,labelId,valId,dim,getVal,setVal,fmtVal){
+    // Clone to remove all old listeners
+    const old=document.getElementById(oldId);
+    const sl=old.cloneNode(false);
+    old.parentNode.replaceChild(sl,old);
+    sl.id=oldId;
+    // Set range first, then value
+    sl.min=dim.min;sl.max=dim.max;sl.step=dim.step||0.5;
+    let v=getVal();
+    if(v===null)v=(parseFloat(dim.min)+parseFloat(dim.max))/2;
+    v=Math.max(parseFloat(dim.min),Math.min(parseFloat(dim.max),v));
+    setVal(v);
+    sl.value=v;
+    document.getElementById(labelId).textContent=dim.axisLabel||dim.label;
+    document.getElementById(valId).textContent=fmtVal(v);
+    sl.addEventListener('input',()=>{
+      const nv=parseFloat(sl.value);
+      setVal(nv);
+      document.getElementById(valId).textContent=fmtVal(nv);
+      if(use3D){build3D();buildAxes3();render3D();}
+    });
+  }
+
+  // Z slider — slices through the Z (3rd) dimension
   const dz=DMAP[zKey];
-  const slZ=document.getElementById('zSlider');
-  slZ.min=dz.min;slZ.max=dz.max;slZ.step=dz.step;slZ.value=P[zKey];
-  document.getElementById('zSliderLabel').textContent=dimLabel(zKey)+' — Z slice';
-  document.getElementById('zSliderVal').textContent=dz.fmt(P[zKey]);
-  slZ.oninput=()=>{
-    P[zKey]=parseFloat(slZ.value);
-    document.getElementById('zSliderVal').textContent=dz.fmt(P[zKey]);
-    if(use3D){build3D();buildAxes3();render3D();}
-  };
+  wireSlider('zSlider','zSliderLabel','zSliderVal',
+    {min:dz.min,max:dz.max,step:dz.step,label:dimLabel(zKey)+' — Z slice'},
+    ()=>P[zKey],
+    v=>{P[zKey]=v;},
+    v=>dz.fmt(v)
+  );
 
-  // X slice slider
+  // X slider — slices through the X axis
   const dx=DMAP[xKey];
-  const slX=document.getElementById('xSlider');
-  slX.min=dx.min;slX.max=dx.max;slX.step=dx.step;
-  xSliceVal=xSliceVal!==null?Math.max(dx.min,Math.min(dx.max,xSliceVal)):(dx.min+dx.max)/2;
-  slX.value=xSliceVal;
-  document.getElementById('xSliderLabel').textContent=dimLabel(xKey)+' — X slice';
-  document.getElementById('xSliderVal').textContent=dx.fmt(xSliceVal);
-  slX.oninput=()=>{
-    xSliceVal=parseFloat(slX.value);
-    document.getElementById('xSliderVal').textContent=dx.fmt(xSliceVal);
-    if(use3D){build3D();buildAxes3();render3D();}
-  };
+  wireSlider('xSlider','xSliderLabel','xSliderVal',
+    {min:dx.min,max:dx.max,step:dx.step,label:dimLabel(xKey)+' — X slice'},
+    ()=>xSliceVal,
+    v=>{xSliceVal=v;},
+    v=>dx.fmt(v)
+  );
 
-  // Y slice slider
+  // Y slider — slices through the Y axis (uses HR_AXIS range if isPsychXY)
   const dyRaw=isPsychXY()?HR_AXIS:DMAP[yKey];
-  const slY=document.getElementById('ySlider');
-  slY.min=dyRaw.min;slY.max=dyRaw.max;slY.step=isPsychXY()?0.5:(DMAP[yKey]?.step||0.5);
-  ySliceVal=ySliceVal!==null?Math.max(dyRaw.min,Math.min(dyRaw.max,ySliceVal)):(dyRaw.min+dyRaw.max)/2;
-  slY.value=ySliceVal;
-  const yLabelStr=isPsychXY()?HR_AXIS.label:dimLabel(yKey);
-  document.getElementById('ySliderLabel').textContent=yLabelStr+' — Y slice';
-  document.getElementById('ySliderVal').textContent=isPsychXY()?HR_AXIS.fmt(ySliceVal):DMAP[yKey].fmt(ySliceVal);
-  slY.oninput=()=>{
-    ySliceVal=parseFloat(slY.value);
-    const fmtY=isPsychXY()?HR_AXIS.fmt(ySliceVal):DMAP[yKey].fmt(ySliceVal);
-    document.getElementById('ySliderVal').textContent=fmtY;
-    if(use3D){build3D();buildAxes3();render3D();}
-  };
+  const yLabel=(isPsychXY()?HR_AXIS.label:dimLabel(yKey))+' — Y slice';
+  const yFmt=isPsychXY()?HR_AXIS.fmt:DMAP[yKey].fmt;
+  wireSlider('ySlider','ySliderLabel','ySliderVal',
+    {min:dyRaw.min,max:dyRaw.max,step:dyRaw.step||0.5,label:yLabel},
+    ()=>ySliceVal,
+    v=>{ySliceVal=v;},
+    yFmt
+  );
 }
 
 /* ── Toggle handler ── */
